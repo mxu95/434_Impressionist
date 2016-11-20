@@ -63,6 +63,13 @@
             <Button
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="Save Painting"
+                android:id="@+id/buttonSaveImage"
+                android:onClick="onButtonClickSavePainting"/>
+
+            <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="Brush"
                 android:id="@+id/buttonBrush"
                 android:onClick="onButtonClickSetBrush"/>

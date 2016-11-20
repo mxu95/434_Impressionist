@@ -11,12 +11,14 @@
     <item android:id="@+id/menuLine"
         android:title="Line" />
 
-    <item android:id="@+id/menuCircleSplatter"
-        android:title="Circle Splatter" />
+    <item android:id="@+id/menuStrokeOrFill"
+        android:title="Stroke or Fill" />
 
-    <item android:id="@+id/menuLineSplatter"
-        android:title="Line Splatter" />
+    <item android:id="@+id/menuSaturatedColors"
+        android:title="Saturated Colors" />
 
+    <item android:id="@+id/menuDynamicWidth"
+        android:title="Dynamic Width" />
 
 
 </menu>

@@ -99,13 +99,29 @@ public class MainActivity extends AppCompatActivity implements OnMenuItemClickLi
                 Toast.makeText(this, "Line Brush", Toast.LENGTH_SHORT).show();
                 _impressionistView.setBrushType(BrushType.Line);
                 return true;
-            case R.id.menuCircleSplatter:
-                Toast.makeText(this, "Circle Splatter Brush", Toast.LENGTH_SHORT).show();
-                _impressionistView.setBrushType(BrushType.CircleSplatter);
+            case R.id.menuSaturatedColors:
+                if(_impressionistView._useSaturatedColors) {
+                    Toast.makeText(this, "Saturated Colors OFF", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "Saturated Colors ON", Toast.LENGTH_SHORT).show();
+                }
+                _impressionistView.setSaturatedColors();
                 return true;
-            case R.id.menuLineSplatter:
-                Toast.makeText(this, "Line Splatter Brush", Toast.LENGTH_SHORT).show();
-                _impressionistView.setBrushType(BrushType.LineSplatter);
+            case R.id.menuDynamicWidth:
+                if(_impressionistView._useDynamicWidth) {
+                    Toast.makeText(this, "Dynamic Width OFF", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "Dynamic Width ON", Toast.LENGTH_SHORT).show();
+                }
+                _impressionistView.setDynamicWidth();
+                return true;
+            case R.id.menuStrokeOrFill:
+                if(_impressionistView._useFill) {
+                    Toast.makeText(this, "Stroke", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "Fill", Toast.LENGTH_SHORT).show();
+                }
+                _impressionistView.setStrokeOrFill();
                 return true;
         }
         return false;
@@ -143,6 +159,7 @@ public class MainActivity extends AppCompatActivity implements OnMenuItemClickLi
                 boolean checkStorage = FileUtils.checkPermissionToWriteToExternalStorage(MainActivity.this);
                 String guessedFilename = URLUtil.guessFileName(imageUrl, null, null);
 
+
                 // See: http://developer.android.com/training/basics/data-storage/files.html
                 // Get the directory for the user's public pictures directory.
                 File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), guessedFilename);
@@ -158,6 +175,25 @@ public class MainActivity extends AppCompatActivity implements OnMenuItemClickLi
 
         for(String url: IMAGE_URLS){
             imageDownloader.download(url, true);
+        }
+    }
+
+    //This code is mostly copy-pasted from the skeleton code which was provided to us.
+    public void onButtonClickSavePainting(View v) {
+        //Verify has permission to save images
+        FileUtils.verifyStoragePermissions(this);
+
+        boolean checkStorage = FileUtils.checkPermissionToWriteToExternalStorage(MainActivity.this);
+        //Creates a unique file name
+        String filename = "Image-"+System.currentTimeMillis()+".jpg";
+
+        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), filename);
+        try {
+            boolean compressSucceeded = _impressionistView.getBitmap().compress(Bitmap.CompressFormat.PNG, 100, new FileOutputStream(file));
+            FileUtils.addImageToGallery(file.getAbsolutePath(), getApplicationContext());
+            Toast.makeText(getApplicationContext(), "Saved to " + file.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
         }
     }
 

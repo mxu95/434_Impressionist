@@ -10,10 +10,12 @@ import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.support.v4.view.VelocityTrackerCompat;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageView;
@@ -40,6 +42,10 @@ public class ImpressionistView extends View {
     private Paint _paintBorder = new Paint();
     private BrushType _brushType = BrushType.Square;
     private float _minBrushRadius = 5;
+    public boolean _useSaturatedColors = false;
+    public boolean _useDynamicWidth = false;
+    public boolean _useFill = true;
+    private VelocityTracker _velocityTracker = null;
 
     public ImpressionistView(Context context) {
         super(context);
@@ -110,11 +116,47 @@ public class ImpressionistView extends View {
         _brushType = brushType;
     }
 
+    //Used by MainActivity to toggle whether or not to use saturated colors
+    public void setSaturatedColors() {
+        if(_useSaturatedColors) {
+            _useSaturatedColors = false;
+        } else {
+            _useSaturatedColors = true;
+        }
+    }
+
+    //Used by MainActivity to toggle whether or not to use the velocitytracker to determine brush width
+    public void setDynamicWidth() {
+        if(_useDynamicWidth) {
+            _useDynamicWidth = false;
+        } else {
+            _useDynamicWidth = true;
+        }
+    }
+
+    //Used by MainActivity to toggle whether or not to use draw filled in shapes or outlines (does not affect line)
+    public void setStrokeOrFill() {
+        if(_useFill) {
+            _useFill = false;
+            _paint.setStyle(Paint.Style.STROKE);
+        } else {
+            _useFill = true;
+            _paint.setStyle(Paint.Style.FILL);
+        }
+    }
+
+    //Returns the bitmap for the save image button
+    public Bitmap getBitmap(){
+        return _offScreenBitmap;
+    }
+
     /**
      * Clears the painting
      */
     public void clearPainting(){
-        //TODO
+        _offScreenBitmap = getDrawingCache().copy(Bitmap.Config.ARGB_8888, true);
+        _offScreenCanvas = new Canvas(_offScreenBitmap);
+        invalidate();
     }
 
     @Override
@@ -131,28 +173,85 @@ public class ImpressionistView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent motionEvent){
-
-        //TODO
-        //Basically, the way this works is to listen for Touch Down and Touch Move events and determine where those
-        //touch locations correspond to the bitmap in the ImageView. You can then grab info about the bitmap--like the pixel color--
-        //at that location
-
-
+        //Gets a list of X and Y coordinates
+        int historySize = motionEvent.getHistorySize();
         float touchX = motionEvent.getX();
         float touchY = motionEvent.getY();
+        int color;
+
+        //Used by the velocity tracker
+        int index = motionEvent.getActionIndex();
+        int pointerId = motionEvent.getPointerId(index);
 
         switch(motionEvent.getAction()) {
-            case MotionEvent.ACTION_MOVE:
-                Log.d("debug", "action move");
+            case MotionEvent.ACTION_DOWN:
+                //Creates a velocity tracker if it does not already exist
+                if(_velocityTracker == null) {
+                    _velocityTracker = VelocityTracker.obtain();
+                } else {
+                    //resets the velocity tracker for each swipe on the screen
+                    _velocityTracker.clear();
+                }
+                _velocityTracker.addMovement(motionEvent);
 
-                int color = getColor(touchX, touchY);
+                //Finds the corresponding pixel color
+                color = getColor(touchX, touchY);
+                //If -1 returns then it is out of bounds or the image is not yet loaded. In either case do nothing
                 if(color == -1) {
                     break;
+                }
+                //If the toggle to use saturated colors is on then saturate the color before drawing
+                if(_useSaturatedColors) {
+                    color = saturateColors(color);
                 }
                 _paint.setColor(color);
                 _paint.setAlpha(_alpha);
 
-                _offScreenCanvas.drawCircle(touchX, touchY, 20, _paint);
+                //The first touch is always default radius in width because there is no velocity yet
+                paintShape(touchX, touchY, _defaultRadius);
+                invalidate();
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+                //Calculates velocity of finger movement if dynamic width is on
+                _velocityTracker.addMovement(motionEvent);
+                float velocity = _defaultRadius;
+                if(_useDynamicWidth) {
+                    _velocityTracker.computeCurrentVelocity(20);
+                    velocity = (float) Math.sqrt(Math.pow(_velocityTracker.getXVelocity(pointerId), 2) + Math.pow(_velocityTracker.getYVelocity(pointerId), 2));
+                }
+
+                //Goes through all historical X and Y coordinates to draw shapes there too (otherwise it looks laggy)
+                for(int i = 0; i < historySize; i++) {
+                    float historicalX = motionEvent.getHistoricalX(i);
+                    float historicalY = motionEvent.getHistoricalY(i);
+
+
+                    color = getColor(historicalX, historicalY);
+                    if(color == -1) {
+                        continue;
+                    }
+                    if(_useSaturatedColors) {
+                        color = saturateColors(color);
+                    }
+
+                    _paint.setColor(color);
+                    _paint.setAlpha(_alpha);
+
+                    paintShape(historicalX, historicalY, velocity);
+                }
+
+                color = getColor(touchX, touchY);
+                if(color == -1) {
+                    break;
+                }
+                if(_useSaturatedColors) {
+                    color = saturateColors(color);
+                }
+                _paint.setColor(color);
+                _paint.setAlpha(_alpha);
+
+                paintShape(touchX, touchY, velocity);
                 invalidate();
                 break;
         }
@@ -160,6 +259,7 @@ public class ImpressionistView extends View {
         return true;
     }
 
+    //Finds the corresponding pixel color in the source image
     private int getColor(float x, float y) {
         //If the image is not loaded, then return -1 to indicate that you should not draw
         if(_imageView == null || _imageView.getDrawable() == null) {
@@ -185,6 +285,30 @@ public class ImpressionistView extends View {
         int actualY = (int)((bitmapHeight/imageHeight)*(y-bitmapPosition.top));
 
         return(sourceBitmap.getPixel(Math.round(actualX), Math.round(actualY)));
+    }
+
+    //Fully saturates a color to make it look more vibrant
+    private int saturateColors(int color) {
+        //Converts color into HSV form and sets saturation to maximum (1)
+        float[] hsv = new float[3];
+        Color.colorToHSV(color, hsv);
+        hsv[1] = 1;
+        return(Color.HSVToColor(hsv));
+    }
+
+    //Paints different shapes depending on the brush type
+    private void paintShape (float touchX, float touchY, float velocity) {
+        switch(_brushType) {
+            case Circle:
+                _offScreenCanvas.drawCircle(touchX, touchY, velocity, _paint);
+                break;
+            case Square:
+                _offScreenCanvas.drawRect(touchX - velocity, touchY - velocity, touchX + velocity, touchY + velocity, _paint);
+                break;
+            case Line:
+                _offScreenCanvas.drawLine(touchX - velocity, touchY - velocity, touchX + velocity, touchY + velocity, _paint);
+                break;
+        }
     }
 
 
